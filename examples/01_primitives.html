@@ -9,6 +9,7 @@
   <script src="https://cdn.8thwall.com/web/xrextras/xrextras.js"></script>
 
   <!-- 8th Wall Engine -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.6.1/dist/aframe-extras.min.js"></script>
   <script async src="../engine/xr.js" data-preload-chunks="slam"></script>
 
   <!-- Image Target Configuration -->
@@ -39,30 +40,36 @@
     xrextras-runtime-error
     xrweb="disableWorldTracking: true">
 
+    <a-assets>
+      <a-asset-item id="model-circle" src="../assets/models/circle.glb"></a-asset-item>
+      <a-asset-item id="model-square" src="../assets/models/square.glb"></a-asset-item>
+    </a-assets>
+
     <a-camera position="0 4 10"></a-camera>
 
     <xrextras-named-image-target name="my-poster">
 
-      <a-plane color="#0d1117" opacity="0.8" rotation="-90 0 0"
-               width="4" height="4" position="0 0.01 0"></a-plane>
+      <a-plane color="#0d1117" opacity="0.8" rotation="-90 0 0" width="4" height="4" position="0 0.01 0"></a-plane>
 
       <a-entity position="0 0.05 0" rotation="-90 0 0">
 
         <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 40000; easing: linear">
-          <a-plane width="2" height="2" wireframe="true" color="#FF7B00"></a-plane>
-          <a-ring radius-inner="1.39" radius-outer="1.41" color="#58a6ff"></a-ring>
+          
+          <a-entity gltf-model="#model-square" animation-mixer="clip: *; loop: repeat" scale="1 1 1"></a-entity>
+          <a-entity gltf-model="#model-circle" animation-mixer="clip: *; loop: repeat" scale="1 1 1"></a-entity>
 
           <a-entity position="0 0 0.2" scale="0.8 0.8 0.8" 
                     animation="property: rotation; to: 0 0 -360; loop: true; dur: 30000; easing: linear">
-            <a-plane width="2" height="2" wireframe="true" color="#FF7B00"></a-plane>
-            <a-ring radius-inner="1.39" radius-outer="1.41" color="#58a6ff"></a-ring>
+            
+            <a-entity gltf-model="#model-square" animation-mixer="clip: *; loop: repeat"></a-entity>
+            <a-entity gltf-model="#model-circle" animation-mixer="clip: *; loop: repeat"></a-entity>
 
             <a-entity position="0 0 0.2" scale="0.7 0.7 0.7" 
                       animation="property: rotation; to: 0 0 360; loop: true; dur: 20000; easing: linear">
-              <a-plane width="2" height="2" wireframe="true" color="#FF7B00"></a-plane>
-              <a-ring radius-inner="1.39" radius-outer="1.41" color="#58a6ff"></a-ring>
               
-              <a-circle radius="0.05" color="#ffffff" opacity="0.8"></a-circle>
+              <a-entity gltf-model="#model-square" animation-mixer="clip: *; loop: repeat"></a-entity>
+              <a-entity gltf-model="#model-circle" animation-mixer="clip: *; loop: repeat"></a-entity>
+              
             </a-entity>
           </a-entity>
         </a-entity>
