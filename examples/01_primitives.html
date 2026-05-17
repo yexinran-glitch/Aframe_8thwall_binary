@@ -43,47 +43,31 @@
 
     <xrextras-named-image-target name="my-poster">
 
-      <!-- Title -->
-      <a-text value="3D Primitives" color="white" align="center"
-              position="0 2.2 0" width="4"></a-text>
+      <a-plane color="#0d1117" opacity="0.8" rotation="-90 0 0"
+               width="4" height="4" position="0 0.01 0"></a-plane>
 
-      <!-- Semi-transparent ground plane -->
-      <a-plane color="#333333" opacity="0.4" rotation="-90 0 0"
-               width="4" height="3" position="0 -0.01 0"></a-plane>
+      <a-entity position="0 0.05 0" rotation="-90 0 0">
 
-      <!-- Row 1: Box, Sphere, Cylinder -->
-      <a-box color="#FF0055" position="-1.2 0.5 -0.5" scale="0.6 0.6 0.6"
-             animation="property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear">
-      </a-box>
+        <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 40000; easing: linear">
+          <a-plane width="2" height="2" wireframe="true" color="#FF7B00"></a-plane>
+          <a-ring radius-inner="1.39" radius-outer="1.41" color="#58a6ff"></a-ring>
 
-      <a-sphere color="#00AAFF" position="0 0.5 -0.5" radius="0.35"
-                animation="property: position; from: 0 0.5 -0.5; to: 0 1.0 -0.5;
-                           loop: true; dur: 1500; dir: alternate; easing: easeInOutQuad">
-      </a-sphere>
+          <a-entity position="0 0 0.2" scale="0.8 0.8 0.8" 
+                    animation="property: rotation; to: 0 0 -360; loop: true; dur: 30000; easing: linear">
+            <a-plane width="2" height="2" wireframe="true" color="#FF7B00"></a-plane>
+            <a-ring radius-inner="1.39" radius-outer="1.41" color="#58a6ff"></a-ring>
 
-      <a-cylinder color="#33CC33" position="1.2 0.4 -0.5" radius="0.25" height="0.8"
-                  animation="property: rotation; to: 360 0 0; loop: true; dur: 3000; easing: linear">
-      </a-cylinder>
-
-      <!-- Row 2: Cone, Torus, Ring -->
-      <a-cone color="#FFAA00" position="-1.2 0.45 0.5"
-              radius-bottom="0.35" radius-top="0" height="0.8"
-              animation="property: scale; from: 1 1 1; to: 1.3 1.3 1.3;
-                         loop: true; dur: 1200; dir: alternate; easing: easeInOutSine">
-      </a-cone>
-
-      <a-torus color="#AA00FF" position="0 0.5 0.5"
-               radius="0.3" radius-tubular="0.06"
-               animation="property: rotation; to: 360 360 0; loop: true; dur: 5000; easing: linear">
-      </a-torus>
-
-      <a-ring color="#FF5599" position="1.2 0.5 0.5"
-              radius-inner="0.15" radius-outer="0.35"
-              animation="property: rotation; to: 0 0 360; loop: true; dur: 3500; easing: linear">
-      </a-ring>
-
+            <a-entity position="0 0 0.2" scale="0.7 0.7 0.7" 
+                      animation="property: rotation; to: 0 0 360; loop: true; dur: 20000; easing: linear">
+              <a-plane width="2" height="2" wireframe="true" color="#FF7B00"></a-plane>
+              <a-ring radius-inner="1.39" radius-outer="1.41" color="#58a6ff"></a-ring>
+              
+              <a-circle radius="0.05" color="#ffffff" opacity="0.8"></a-circle>
+            </a-entity>
+          </a-entity>
+        </a-entity>
+      </a-entity>
     </xrextras-named-image-target>
-
   </a-scene>
 </body>
 </html>
