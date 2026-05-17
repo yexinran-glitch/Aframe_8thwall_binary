@@ -31,8 +31,85 @@
     };
     window.XR8 ? onxrloaded() : window.addEventListener('xrloaded', onxrloaded);
   </script>
-</head>
+<head>
+  <head>
+    <script>
+      AFRAME.registerComponent('generative-tunnel', {
+        schema: {
+          layers: { type: 'int', default: 12 },             // 总层数
+          baseScale: { type: 'number', default: 0.35 },    // 第 1 层的基础大小
+          scaleMultiplier: { type: 'number', default: 1.125 }, // 逐层放大比例 (1 + 1/8)
+          zStep: { type: 'number', default: 0.15 },        // 每层向前逼近的距离
+          startZ: { type: 'number', default: 0.05 },       // 初始距离
+          rotationStep: { type: 'number', default: 4 },     // 每一层的旋转递增角度
+          staggerDelay: { type: 'number', default: 250 }    // 【新增】：核心动效参数，每层出场的间隔时间（毫秒）
+        },
+  
+        init: function () {
+          const data = this.data;
+          const el = this.el;
+  
+          for (let i = 0; i < data.layers; i++) {
+            const currentScale = data.baseScale * Math.pow(data.scaleMultiplier, i);
+            const currentZ = data.startZ + (i * data.zStep);
+            const currentRotation = i * data.rotationStep;
+            
+            // 【核心】：根据当前层数，计算这一层的专属延迟时间
+            const delayTime = i * data.staggerDelay;
+  
+            // 1. 创建层容器
+            const layerEntity = document.createElement('a-entity');
+            layerEntity.setAttribute('position', `0 0 ${currentZ}`);
+            
+            // 【核心】：设置动画起点状态（初始大小为0，初始旋转为0）
+            layerEntity.setAttribute('scale', '0 0 0');
+            layerEntity.setAttribute('rotation', '0 0 0');
+  
+            // 2. 添加有序放大动效 (冒出来的过程)
+            // easeOutBack 会让模型放大时产生一点微微的“回弹”弹动感，非常灵动
+            layerEntity.setAttribute('animation__scale', `
+              property: scale;
+              from: 0 0 0;
+              to: 1 1 1;
+              dur: 1000;
+              delay: ${delayTime};
+              easing: easeOutBack
+            `);
+  
+            // 3. 添加有序旋转动效 (转到对应角度的过程)
+            // easeOutCubic 会让旋转动作由快到慢，显得自然优雅
+            layerEntity.setAttribute('animation__rotation', `
+              property: rotation;
+              from: 0 0 0;
+              to: 0 0 ${currentRotation};
+              dur: 1500;
+              delay: ${delayTime};
+              easing: easeOutCubic
+            `);
+  
+            // 4. 动态生成你的 Square 和 Circle 模型（保持平躺）
+            const square = document.createElement('a-entity');
+            square.setAttribute('gltf-model', '#model-square');
+            square.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+            square.setAttribute('rotation', '-90 0 0');
+  
+            const circle = document.createElement('a-entity');
+            circle.setAttribute('gltf-model', '#model-circle');
+            circle.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+            circle.setAttribute('rotation', '-90 0 0');
+  
+            // 5. 组装到场景中
+            layerEntity.appendChild(square);
+            layerEntity.appendChild(circle);
+            el.appendChild(layerEntity);
+          }
+        }
+      });
+    </script>
+  </head>
+  
 <body>
+  <a-entity generative-tunnel="layers: 15; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.12; rotationStep: 5; staggerDelay: 500"></a-entity>
   <a-scene
     xrextras-gesture-detector
     xrextras-almost-there
@@ -44,36 +121,15 @@
       <a-asset-item id="model-circle" src="../assets/models/circle.glb"></a-asset-item>
       <a-asset-item id="model-square" src="../assets/models/square.glb"></a-asset-item>
     </a-assets>
-
+    
     <a-camera position="0 4 10"></a-camera>
-
+    
     <xrextras-named-image-target name="my-poster">
+      
+      <a-plane color="#0d1117" opacity="0.7" width="4" height="4" position="0 0 0.01"></a-plane>
+      
+      <a-entity generative-tunnel="layers: 15; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.15; rotationStep: 4"></a-entity>
 
-      <a-plane color="#0d1117" opacity="0.8" rotation="-90 0 0" width="4" height="4" position="0 0.01 0"></a-plane>
-
-      <a-entity position="0 0.05 0" rotation="-90 0 0">
-
-        <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 40000; easing: linear">
-          
-          <a-entity gltf-model="#model-square" animation-mixer="clip: *; loop: repeat" scale="1 1 1"></a-entity>
-          <a-entity gltf-model="#model-circle" animation-mixer="clip: *; loop: repeat" scale="1 1 1"></a-entity>
-
-          <a-entity position="0 0 0.2" scale="0.8 0.8 0.8" 
-                    animation="property: rotation; to: 0 0 -360; loop: true; dur: 30000; easing: linear">
-            
-            <a-entity gltf-model="#model-square" animation-mixer="clip: *; loop: repeat"></a-entity>
-            <a-entity gltf-model="#model-circle" animation-mixer="clip: *; loop: repeat"></a-entity>
-
-            <a-entity position="0 0 0.2" scale="0.7 0.7 0.7" 
-                      animation="property: rotation; to: 0 0 360; loop: true; dur: 20000; easing: linear">
-              
-              <a-entity gltf-model="#model-square" animation-mixer="clip: *; loop: repeat"></a-entity>
-              <a-entity gltf-model="#model-circle" animation-mixer="clip: *; loop: repeat"></a-entity>
-              
-            </a-entity>
-          </a-entity>
-        </a-entity>
-      </a-entity>
     </xrextras-named-image-target>
   </a-scene>
 </body>
