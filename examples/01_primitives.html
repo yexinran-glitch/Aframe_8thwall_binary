@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>01 — 3D Primitives with Static Anchor</title>
+  <title>01 — 3D Primitives with Multiply Blending Anchor</title>
 
   <script src="https://cdn.8thwall.com/web/aframe/8frame-1.3.0.min.js"></script>
   <script src="https://cdn.8thwall.com/web/xrextras/xrextras.js"></script>
@@ -46,7 +46,7 @@
           const tunnel = document.querySelector('#the-tunnel');
 
           const crossfadeDur = 1500; 
-          const holdDur = 1500;      
+          const holdDur = 1000;      
           const step = crossfadeDur + holdDur; 
           
           let t = 0;
@@ -87,7 +87,7 @@
     });
 
     // ==========================================
-    // 达芬奇分形隧道
+    // 达芬奇分形隧道（纹理材质升级版）
     // ==========================================
     AFRAME.registerComponent('generative-tunnel', {
       schema: {
@@ -106,6 +106,14 @@
         rootAnchor.setAttribute('scale', `${data.baseScale} ${data.baseScale} ${data.baseScale}`);
         el.appendChild(rootAnchor);
 
+        // ==========================================
+        // 【核心材质升级】：引入达芬奇手稿并开启正片叠底
+        // ==========================================
+        const texSrc = document.querySelector('#img-texture').src;
+        const customTexture = new THREE.TextureLoader().load(texSrc);
+        customTexture.wrapS = THREE.RepeatWrapping;
+        customTexture.wrapT = THREE.RepeatWrapping;
+
         const applyOpacityToModel = (e) => {
           const model = e.detail.model;
           const layerIndex = parseInt(e.target.getAttribute('data-index') || 0);
@@ -113,6 +121,14 @@
 
           model.traverse((node) => {
             if (node.isMesh && node.material) {
+              // 赋予手稿纹理贴图
+              node.material.map = customTexture;
+              
+              // 开启正片叠底模式 (Multiply Blending)
+              node.material.blending = THREE.MultiplyBlending;
+              // 锁定底色为白，确保手稿的深色纹理完美透出
+              node.material.color.setHex(0xffffff);
+
               node.material.transparent = true;
               node.material.opacity = targetOpacity;
               node.material.needsUpdate = true;
@@ -121,11 +137,6 @@
         };
         this.applyOpacityToModel = applyOpacityToModel;
 
-        // ==========================================
-        // 【核心分离】：坚固的第一层（Anchor）
-        // 在网页加载之初直接“物理浇筑”，没有任何动画和延迟
-        // 当海报被识别时，它将立刻出现在海报上作为静止的底座
-        // ==========================================
         const layerContainer0 = document.createElement('a-entity');
         const growthNode0 = document.createElement('a-entity');
         
@@ -147,10 +158,8 @@
         layerContainer0.appendChild(growthNode0);
         rootAnchor.appendChild(layerContainer0);
 
-        // 将第一层的顶端保存下来，供后续迭代使用
         this.currentParent = growthNode0;
 
-        // 监听场记的哨声，只启动第 2 层及以后的迭代
         this.el.addEventListener('start-tunnel', () => {
           this.buildTunnel();
         });
@@ -160,15 +169,13 @@
         const data = this.data;
         const growthDuration = 450; 
         
-        // 我们去掉了第一层，所以参与生长的层数是 layers - 1
         const iteratingLayersCount = data.layers - 1; 
         const allLayersGrownTime = ((iteratingLayersCount - 1) * data.staggerDelay) + growthDuration;
         
         let currentParent = this.currentParent;
 
-        // 循环直接从 i = 1 开始（第 2 层）
         for (let i = 1; i < data.layers; i++) {
-          const growDelay = (i - 1) * data.staggerDelay; // 让生长时间从 0 开始算起
+          const growDelay = (i - 1) * data.staggerDelay; 
           const rotationDelay = allLayersGrownTime;
 
           const layerContainer = document.createElement('a-entity');
@@ -249,6 +256,8 @@
       <img id="img-frame2" src="../assets/Frame_2.png">
       <img id="img-frame3" src="../assets/Frame_3.png">
       <img id="img-frame4" src="../assets/Frame_4.png">
+
+      <img id="img-texture" src="../assets/Targets/Da_Vinci_Vitruve_Luc_Viatour.webp">
     </a-assets>
     
     <a-camera position="0 4 10"></a-camera>
