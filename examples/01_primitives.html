@@ -33,73 +33,87 @@
     AFRAME.registerComponent('generative-tunnel', {
       schema: {
         layers: { type: 'int', default: 15 },             // 总层数
-        baseScale: { type: 'number', default: 0.35 },    // 第 1 层的基础大小
-        scaleMultiplier: { type: 'number', default: 1.125 }, // 逐层放大比例
-        zStep: { type: 'number', default: 0.15 },        // 每层向前逼近的距离
-        startZ: { type: 'number', default: 0.05 },       // 初始距离
-        rotationStep: { type: 'number', default: 4 },     // 每一层的旋转递增角度
-        staggerDelay: { type: 'number', default: 400 }    // 每层出场的间隔时间（400ms更丝滑）
+        baseScale: { type: 'number', default: 0.35 },    // 全局基础大小
+        scaleMultiplier: { type: 'number', default: 1.125 }, // 逐层放大比例 (1 + 1/8)
+        zStep: { type: 'number', default: 0.4 },         // 统一的位移模数（归一化后可适当加大，视觉效果极佳）
+        staggerDelay: { type: 'number', default: 500 }    // 每层生长的接力时间
       },
 
       init: function () {
         const data = this.data;
         const el = this.el;
 
-        // 【数学计算】：计算出最后一层模型长出来需要的总时间
-        // 比如 15 层，最后一层的延迟是 14 * 400 = 5600ms，加上自身生长 1000ms，总计 6600ms
-        const finalLayerGrowTime = ((data.layers - 1) * data.staggerDelay) + 1000;
+        const growthDuration = 450; 
+        const allLayersGrownTime = ((data.layers - 1) * data.staggerDelay) + growthDuration;
+
+        // 【核心修正 1】：创建一个纯净的始祖节点（Root），由它统一承担 0.35 的基础缩放
+        const rootAnchor = document.createElement('a-entity');
+        rootAnchor.setAttribute('scale', `${data.baseScale} ${data.baseScale} ${data.baseScale}`);
+        el.appendChild(rootAnchor);
+
+        // 指针初始指向这个带有基准缩放的始祖节点
+        let currentParent = rootAnchor;
 
         for (let i = 0; i < data.layers; i++) {
-          const currentScale = data.baseScale * Math.pow(data.scaleMultiplier, i);
-          const currentZ = data.startZ + (i * data.zStep);
-          const currentRotation = i * data.rotationStep;
-          
-          // 每一层生长的延迟时间
           const growDelay = i * data.staggerDelay;
+          const rotationDelay = allLayersGrownTime;
 
-          // 【核心改动】：旋转的延迟时间 = 等待全场生长完毕 + 这一层的微调延迟（让旋转也有序接力）
-          const rotationDelay = finalLayerGrowTime + (i * 150); 
+          // 结构 1：外层死锁容器（坐标系完美继承，严丝合缝）
+          const layerContainer = document.createElement('a-entity');
+          layerContainer.setAttribute('position', '0 0 0');
+          layerContainer.setAttribute('scale', '1 1 1');
+          layerContainer.setAttribute('rotation', '0 0 0');
+          layerContainer.setAttribute('material', `
+          component: material;
+          opacity: 0.88;
+          transparent: true;
+          color: #ffffff
+          `);
+          
+          // 结构 2：内层生长器（纯净的 Z 轴生长轨道）
+          const growthNode = document.createElement('a-entity');
+          growthNode.setAttribute('position', '0 0 0');
+          growthNode.setAttribute('scale', '1 1 1');
+          growthNode.setAttribute('rotation', '0 0 0');
 
-          // 1. 创建层容器
-          const layerEntity = document.createElement('a-entity');
-          layerEntity.setAttribute('position', `0 0 ${currentZ}`);
-          layerEntity.setAttribute('scale', '0 0 0');
-          layerEntity.setAttribute('rotation', '0 0 0');
+          if (i === 0) {
+            // 第 1 层：作为隧道的起点，在原点原地无中生有放大到 1 1 1
+            layerContainer.setAttribute('animation__scale', `
+              property: scale; from: 0 0 0; to: 1 1 1; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad
+            `);
+          } else {
+            // 第 2 层及后续所有层：没有任何特殊照顾，逻辑完全统一！
+            // 它们严格在前一层的物理边界上，向前跨出完全相同的 zStep，并等比放大 1/8
+            growthNode.setAttribute('animation__pos', `
+              property: position; from: 0 0 0; to: 0 0 ${data.zStep}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad
+            `);
 
-          // 2. 阶段 1：慢慢有序冒出来
-          layerEntity.setAttribute('animation__scale', `
-            property: scale;
-            from: 0 0 0;
-            to: 1 1 1;
-            dur: 1000;
-            delay: ${growDelay};
-            easing: easeOutBack
+            growthNode.setAttribute('animation__scale', `
+              property: scale; from: 1 1 1; to: ${data.scaleMultiplier} ${data.scaleMultiplier} ${data.scaleMultiplier}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad
+            `);
+          }
+
+          // 阶段 2：全场大旋转（所有人等静态隧道完全构建完毕，再统一发车，绕着笔直的 Z 轴转 4 度）
+          layerContainer.setAttribute('animation__rotation', `
+            property: rotation; from: 0 0 0; to: 0 0 10; dur: 2500; delay: ${rotationDelay}; easing: easeOutCubic
           `);
 
-          // 3. 阶段 2：全部出现后，再依次优雅旋转
-          layerEntity.setAttribute('animation__rotation', `
-            property: rotation;
-            from: 0 0 0;
-            to: 0 0 ${currentRotation};
-            dur: 2000;
-            delay: ${rotationDelay};
-            easing: easeOutCubic
-          `);
-
-          // 4. 动态生成你的 Square 和 Circle 模型（保持平躺）
+          // 【核心修正 2】：所有的 3D 模型回归最纯净的 1 1 1，没有任何数学污染
           const square = document.createElement('a-entity');
           square.setAttribute('gltf-model', '#model-square');
-          square.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
           square.setAttribute('rotation', '-90 0 0');
 
           const circle = document.createElement('a-entity');
           circle.setAttribute('gltf-model', '#model-circle');
-          circle.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
           circle.setAttribute('rotation', '-90 0 0');
 
-          layerEntity.appendChild(square);
-          layerEntity.appendChild(circle);
-          el.appendChild(layerEntity);
+          growthNode.appendChild(square);
+          growthNode.appendChild(circle);
+          layerContainer.appendChild(growthNode);
+
+          // 完美的递归链式套娃
+          currentParent.appendChild(layerContainer);
+          currentParent = growthNode; 
         }
       }
     });
@@ -125,7 +139,7 @@
       
       <a-plane color="#0d1117" opacity="0.7" width="4" height="4" position="0 0 0.01"></a-plane>
       
-      <a-entity generative-tunnel="layers: 15; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.15; rotationStep: 4; staggerDelay: 350"></a-entity>
+      <a-entity position="0 0 0.05" rotation="0 0 0" generative-tunnel="layers: 20; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.1.5; staggerDelay: 300"></a-entity>
 
     </xrextras-named-image-target>
   </a-scene>
