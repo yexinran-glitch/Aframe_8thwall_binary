@@ -4,15 +4,12 @@
   <meta charset="utf-8">
   <title>01 — 3D Primitives</title>
 
-  <!-- AR Libraries -->
   <script src="https://cdn.8thwall.com/web/aframe/8frame-1.3.0.min.js"></script>
   <script src="https://cdn.8thwall.com/web/xrextras/xrextras.js"></script>
 
-  <!-- 8th Wall Engine -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.6.1/dist/aframe-extras.min.js"></script>
   <script async src="../engine/xr.js" data-preload-chunks="slam"></script>
 
-  <!-- Image Target Configuration -->
   <script>
     const onxrloaded = () => {
       XR8.XrController.configure({
@@ -31,85 +28,85 @@
     };
     window.XR8 ? onxrloaded() : window.addEventListener('xrloaded', onxrloaded);
   </script>
-<head>
-  <head>
-    <script>
-      AFRAME.registerComponent('generative-tunnel', {
-        schema: {
-          layers: { type: 'int', default: 12 },             // 总层数
-          baseScale: { type: 'number', default: 0.35 },    // 第 1 层的基础大小
-          scaleMultiplier: { type: 'number', default: 1.125 }, // 逐层放大比例 (1 + 1/8)
-          zStep: { type: 'number', default: 0.15 },        // 每层向前逼近的距离
-          startZ: { type: 'number', default: 0.05 },       // 初始距离
-          rotationStep: { type: 'number', default: 4 },     // 每一层的旋转递增角度
-          staggerDelay: { type: 'number', default: 250 }    // 【新增】：核心动效参数，每层出场的间隔时间（毫秒）
-        },
-  
-        init: function () {
-          const data = this.data;
-          const el = this.el;
-  
-          for (let i = 0; i < data.layers; i++) {
-            const currentScale = data.baseScale * Math.pow(data.scaleMultiplier, i);
-            const currentZ = data.startZ + (i * data.zStep);
-            const currentRotation = i * data.rotationStep;
-            
-            // 【核心】：根据当前层数，计算这一层的专属延迟时间
-            const delayTime = i * data.staggerDelay;
-  
-            // 1. 创建层容器
-            const layerEntity = document.createElement('a-entity');
-            layerEntity.setAttribute('position', `0 0 ${currentZ}`);
-            
-            // 【核心】：设置动画起点状态（初始大小为0，初始旋转为0）
-            layerEntity.setAttribute('scale', '0 0 0');
-            layerEntity.setAttribute('rotation', '0 0 0');
-  
-            // 2. 添加有序放大动效 (冒出来的过程)
-            // easeOutBack 会让模型放大时产生一点微微的“回弹”弹动感，非常灵动
-            layerEntity.setAttribute('animation__scale', `
-              property: scale;
-              from: 0 0 0;
-              to: 1 1 1;
-              dur: 1000;
-              delay: ${delayTime};
-              easing: easeOutBack
-            `);
-  
-            // 3. 添加有序旋转动效 (转到对应角度的过程)
-            // easeOutCubic 会让旋转动作由快到慢，显得自然优雅
-            layerEntity.setAttribute('animation__rotation', `
-              property: rotation;
-              from: 0 0 0;
-              to: 0 0 ${currentRotation};
-              dur: 1500;
-              delay: ${delayTime};
-              easing: easeOutCubic
-            `);
-  
-            // 4. 动态生成你的 Square 和 Circle 模型（保持平躺）
-            const square = document.createElement('a-entity');
-            square.setAttribute('gltf-model', '#model-square');
-            square.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
-            square.setAttribute('rotation', '-90 0 0');
-  
-            const circle = document.createElement('a-entity');
-            circle.setAttribute('gltf-model', '#model-circle');
-            circle.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
-            circle.setAttribute('rotation', '-90 0 0');
-  
-            // 5. 组装到场景中
-            layerEntity.appendChild(square);
-            layerEntity.appendChild(circle);
-            el.appendChild(layerEntity);
-          }
+
+  <script>
+    AFRAME.registerComponent('generative-tunnel', {
+      schema: {
+        layers: { type: 'int', default: 15 },             // 总层数
+        baseScale: { type: 'number', default: 0.35 },    // 第 1 层的基础大小
+        scaleMultiplier: { type: 'number', default: 1.125 }, // 逐层放大比例
+        zStep: { type: 'number', default: 0.15 },        // 每层向前逼近的距离
+        startZ: { type: 'number', default: 0.05 },       // 初始距离
+        rotationStep: { type: 'number', default: 4 },     // 每一层的旋转递增角度
+        staggerDelay: { type: 'number', default: 400 }    // 每层出场的间隔时间（400ms更丝滑）
+      },
+
+      init: function () {
+        const data = this.data;
+        const el = this.el;
+
+        // 【数学计算】：计算出最后一层模型长出来需要的总时间
+        // 比如 15 层，最后一层的延迟是 14 * 400 = 5600ms，加上自身生长 1000ms，总计 6600ms
+        const finalLayerGrowTime = ((data.layers - 1) * data.staggerDelay) + 1000;
+
+        for (let i = 0; i < data.layers; i++) {
+          const currentScale = data.baseScale * Math.pow(data.scaleMultiplier, i);
+          const currentZ = data.startZ + (i * data.zStep);
+          const currentRotation = i * data.rotationStep;
+          
+          // 每一层生长的延迟时间
+          const growDelay = i * data.staggerDelay;
+
+          // 【核心改动】：旋转的延迟时间 = 等待全场生长完毕 + 这一层的微调延迟（让旋转也有序接力）
+          const rotationDelay = finalLayerGrowTime + (i * 150); 
+
+          // 1. 创建层容器
+          const layerEntity = document.createElement('a-entity');
+          layerEntity.setAttribute('position', `0 0 ${currentZ}`);
+          layerEntity.setAttribute('scale', '0 0 0');
+          layerEntity.setAttribute('rotation', '0 0 0');
+
+          // 2. 阶段 1：慢慢有序冒出来
+          layerEntity.setAttribute('animation__scale', `
+            property: scale;
+            from: 0 0 0;
+            to: 1 1 1;
+            dur: 1000;
+            delay: ${growDelay};
+            easing: easeOutBack
+          `);
+
+          // 3. 阶段 2：全部出现后，再依次优雅旋转
+          layerEntity.setAttribute('animation__rotation', `
+            property: rotation;
+            from: 0 0 0;
+            to: 0 0 ${currentRotation};
+            dur: 2000;
+            delay: ${rotationDelay};
+            easing: easeOutCubic
+          `);
+
+          // 4. 动态生成你的 Square 和 Circle 模型（保持平躺）
+          const square = document.createElement('a-entity');
+          square.setAttribute('gltf-model', '#model-square');
+          square.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+          square.setAttribute('rotation', '-90 0 0');
+
+          const circle = document.createElement('a-entity');
+          circle.setAttribute('gltf-model', '#model-circle');
+          circle.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+          circle.setAttribute('rotation', '-90 0 0');
+
+          layerEntity.appendChild(square);
+          layerEntity.appendChild(circle);
+          el.appendChild(layerEntity);
         }
-      });
-    </script>
-  </head>
-  
+      }
+    });
+  </script>
+</head>
+
 <body>
-  <a-entity generative-tunnel="layers: 15; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.12; rotationStep: 5; staggerDelay: 500"></a-entity>
   <a-scene
     xrextras-gesture-detector
     xrextras-almost-there
@@ -128,7 +125,7 @@
       
       <a-plane color="#0d1117" opacity="0.7" width="4" height="4" position="0 0 0.01"></a-plane>
       
-      <a-entity generative-tunnel="layers: 15; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.15; rotationStep: 4"></a-entity>
+      <a-entity generative-tunnel="layers: 15; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.15; rotationStep: 4; staggerDelay: 350"></a-entity>
 
     </xrextras-named-image-target>
   </a-scene>
