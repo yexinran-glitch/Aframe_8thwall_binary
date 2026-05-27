@@ -32,11 +32,11 @@
   <script>
     AFRAME.registerComponent('generative-tunnel', {
       schema: {
-        layers: { type: 'int', default: 15 },             // 总层数
-        baseScale: { type: 'number', default: 0.35 },    // 全局基础大小
-        scaleMultiplier: { type: 'number', default: 1.125 }, // 逐层放大比例 (1 + 1/8)
-        zStep: { type: 'number', default: 0.4 },         // 统一的位移模数（归一化后可适当加大，视觉效果极佳）
-        staggerDelay: { type: 'number', default: 500 }    // 每层生长的接力时间
+        layers: { type: 'int', default: 20 },             // 锁定 20 层
+        baseScale: { type: 'number', default: 0.35 },    // 锁定 0.35
+        scaleMultiplier: { type: 'number', default: 1.125 }, // 锁定 1.125
+        zStep: { type: 'number', default: 0.05 },         // 严格死锁 0.05 紧凑高密度
+        staggerDelay: { type: 'number', default: 300 }    // 锁定 300ms 节奏
       },
 
       init: function () {
@@ -44,21 +44,37 @@
         const el = this.el;
 
         const growthDuration = 450; 
+        // 依据你留存的 20层 * 300ms 参数，进行精密无缝的时间矩阵配平
         const allLayersGrownTime = ((data.layers - 1) * data.staggerDelay) + growthDuration;
 
-        // 【核心修正 1】：创建一个纯净的始祖节点（Root），由它统一承担 0.35 的基础缩放
         const rootAnchor = document.createElement('a-entity');
         rootAnchor.setAttribute('scale', `${data.baseScale} ${data.baseScale} ${data.baseScale}`);
         el.appendChild(rootAnchor);
 
-        // 指针初始指向这个带有基准缩放的始祖节点
         let currentParent = rootAnchor;
+
+        // 统一的 WebGL 材质穿透渐变算法
+        const applyOpacityToModel = (e) => {
+          const model = e.detail.model;
+          const layerIndex = e.target.getAttribute('data-index') || 0;
+          
+          // 细节控制：第 1 层 (i=0) 透明度绝对为 1.0 实心；后续层开启空气透视渐变
+          const targetOpacity = (layerIndex == 0) ? 1.0 : 0.15 + (layerIndex / (data.layers - 1)) * 0.85;
+
+          model.traverse((node) => {
+            if (node.isMesh && node.material) {
+              node.material.transparent = true;
+              node.material.opacity = targetOpacity;
+              node.material.needsUpdate = true;
+            }
+          });
+        };
 
         for (let i = 0; i < data.layers; i++) {
           const growDelay = i * data.staggerDelay;
           const rotationDelay = allLayersGrownTime;
 
-          // 结构 1：外层死锁容器（坐标系完美继承，严丝合缝）
+          // 结构 1：外层死锁容器
           const layerContainer = document.createElement('a-entity');
           layerContainer.setAttribute('position', '0 0 0');
           layerContainer.setAttribute('scale', '1 1 1');
@@ -70,20 +86,17 @@
           color: #ffffff
           `);
           
-          // 结构 2：内层生长器（纯净的 Z 轴生长轨道）
+          // 结构 2：内层生长器
           const growthNode = document.createElement('a-entity');
           growthNode.setAttribute('position', '0 0 0');
           growthNode.setAttribute('scale', '1 1 1');
           growthNode.setAttribute('rotation', '0 0 0');
 
           if (i === 0) {
-            // 第 1 层：作为隧道的起点，在原点原地无中生有放大到 1 1 1
             layerContainer.setAttribute('animation__scale', `
               property: scale; from: 0 0 0; to: 1 1 1; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad
             `);
           } else {
-            // 第 2 层及后续所有层：没有任何特殊照顾，逻辑完全统一！
-            // 它们严格在前一层的物理边界上，向前跨出完全相同的 zStep，并等比放大 1/8
             growthNode.setAttribute('animation__pos', `
               property: position; from: 0 0 0; to: 0 0 ${data.zStep}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad
             `);
@@ -93,25 +106,55 @@
             `);
           }
 
-          // 阶段 2：全场大旋转（所有人等静态隧道完全构建完毕，再统一发车，绕着笔直的 Z 轴转 4 度）
-          layerContainer.setAttribute('animation__rotation', `
-            property: rotation; from: 0 0 0; to: 0 0 10; dur: 2500; delay: ${rotationDelay}; easing: easeOutCubic
-          `);
+          // 细节控制：第一层（i=0）绝对静止不旋转；后续层在合围后整齐划一启动大旋转
+          if (i > 0) {
+            layerContainer.setAttribute('animation__rotation', `
+              property: rotation; from: 0 0 0; to: 0 0 10; dur: 2500; delay: ${rotationDelay}; easing: easeOutCubic
+            `);
+          }
 
-          // 【核心修正 2】：所有的 3D 模型回归最纯净的 1 1 1，没有任何数学污染
+          // 模型实体创建与参数绑定
           const square = document.createElement('a-entity');
           square.setAttribute('gltf-model', '#model-square');
           square.setAttribute('rotation', '-90 0 0');
+          square.setAttribute('data-index', i); 
 
           const circle = document.createElement('a-entity');
           circle.setAttribute('gltf-model', '#model-circle');
           circle.setAttribute('rotation', '-90 0 0');
+          circle.setAttribute('data-index', i);
 
-          growthNode.appendChild(square);
-          growthNode.appendChild(circle);
+          square.addEventListener('model-loaded', applyOpacityToModel);
+          circle.addEventListener('model-loaded', applyOpacityToModel);
+
+          // ==========================================
+          // 粒子化消散机制（完美契合你的时间参数轴）
+          // ==========================================
+          const particleDissolveDelay = allLayersGrownTime + 2500 + (i * 40); 
+
+          const particlesWrapper = document.createElement('a-entity');
+          particlesWrapper.setAttribute('position', '0 0 0');
+          particlesWrapper.setAttribute('scale', '1 1 1');
+
+          // 随机炸裂飞散矩阵计算
+          const randomX = (Math.random() - 0.5) * 4; 
+          const randomY = (Math.random() - 0.5) * 4; 
+          const randomZ = Math.random() * 2;        
+
+          particlesWrapper.setAttribute('animation__dissolvePos', `
+            property: position; to: ${randomX} ${randomY} ${randomZ}; dur: 800; delay: ${particleDissolveDelay}; easing: easeInExpo
+          `);
+
+          particlesWrapper.setAttribute('animation__dissolveScale', `
+            property: scale; to: 0 0 0; dur: 800; delay: ${particleDissolveDelay}; easing: easeInExpo
+          `);
+
+          // 层级装配
+          particlesWrapper.appendChild(square);
+          particlesWrapper.appendChild(circle);
+          growthNode.appendChild(particlesWrapper);
           layerContainer.appendChild(growthNode);
 
-          // 完美的递归链式套娃
           currentParent.appendChild(layerContainer);
           currentParent = growthNode; 
         }
@@ -137,9 +180,9 @@
     
     <xrextras-named-image-target name="my-poster">
       
-      <a-plane color="#0d1117" opacity="0.7" width="4" height="4" position="0 0 0.01"></a-plane>
+      <a-plane color="#0d1117" opacity="0.2" width="4" height="4" position="0 0 0.01"></a-plane>
       
-      <a-entity position="0 0 0.05" rotation="0 0 0" generative-tunnel="layers: 20; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.1.5; staggerDelay: 300"></a-entity>
+      <a-entity position="0 0 0.05" rotation="0 0 0" generative-tunnel="layers: 20; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.05; staggerDelay: 300"></a-entity>
 
     </xrextras-named-image-target>
   </a-scene>
