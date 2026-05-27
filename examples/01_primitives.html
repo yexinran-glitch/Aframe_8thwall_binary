@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>01 — 3D Primitives with Director Sequence</title>
+  <title>01 — 3D Primitives with Static Anchor</title>
 
   <script src="https://cdn.8thwall.com/web/aframe/8frame-1.3.0.min.js"></script>
   <script src="https://cdn.8thwall.com/web/xrextras/xrextras.js"></script>
@@ -30,14 +30,12 @@
 
   <script>
     // ==========================================
-    // 【核心新增】：场记控制器 (Scene Director)
-    // 负责监听海报扫描事件，并严格控制 4 张图和隧道的出场顺序
+    // 电影级场记控制器 (Cinematic Scene Director)
     // ==========================================
     AFRAME.registerComponent('scene-director', {
       init: function() {
         const sceneEl = this.el.sceneEl;
         
-        // 当摄像头真正识别到海报的那一瞬间，触发这个函数
         sceneEl.addEventListener('xrimagefound', (e) => {
           if (e.detail.name !== 'my-poster') return;
 
@@ -47,43 +45,49 @@
           const f4 = document.querySelector('#f4');
           const tunnel = document.querySelector('#the-tunnel');
 
-          // 每张图片的停留时间（毫秒），你可以自由修改这个数字来控制翻书的速度
-          const frameDuration = 1500; 
-          let currentTime = 0;
+          const crossfadeDur = 1500; 
+          const holdDur = 1500;      
+          const step = crossfadeDur + holdDur; 
+          
+          let t = 0;
 
-          // 强制重置所有状态（防重复扫描）
-          f1.setAttribute('visible', 'false');
-          f2.setAttribute('visible', 'false');
-          f3.setAttribute('visible', 'false');
-          f4.setAttribute('visible', 'false');
+          setTimeout(() => {
+            f1.setAttribute('animation__fadein', `property: material.opacity; from: 0; to: 1; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+          }, t);
 
-          // 1. 出现 Frame 1
-          setTimeout(() => { f1.setAttribute('visible', 'true'); }, currentTime);
-          currentTime += frameDuration;
+          t += step;
 
-          // 2. 切换 Frame 2
-          setTimeout(() => { f1.setAttribute('visible', 'false'); f2.setAttribute('visible', 'true'); }, currentTime);
-          currentTime += frameDuration;
+          setTimeout(() => {
+            f1.setAttribute('animation__fadeout', `property: material.opacity; from: 1; to: 0; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+            f2.setAttribute('animation__fadein', `property: material.opacity; from: 0; to: 1; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+          }, t);
 
-          // 3. 切换 Frame 3
-          setTimeout(() => { f2.setAttribute('visible', 'false'); f3.setAttribute('visible', 'true'); }, currentTime);
-          currentTime += frameDuration;
+          t += step;
 
-          // 4. 切换 Frame 4
-          setTimeout(() => { f3.setAttribute('visible', 'false'); f4.setAttribute('visible', 'true'); }, currentTime);
-          currentTime += frameDuration;
+          setTimeout(() => {
+            f2.setAttribute('animation__fadeout', `property: material.opacity; from: 1; to: 0; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+            f3.setAttribute('animation__fadein', `property: material.opacity; from: 0; to: 1; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+          }, t);
 
-          // 5. 隐藏 Frame 4，并拉响隧道的启动警报！
-          setTimeout(() => { 
-            f4.setAttribute('visible', 'false'); 
-            tunnel.emit('start-tunnel'); 
-          }, currentTime);
+          t += step;
+
+          setTimeout(() => {
+            f3.setAttribute('animation__fadeout', `property: material.opacity; from: 1; to: 0; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+            f4.setAttribute('animation__fadein', `property: material.opacity; from: 0; to: 1; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+          }, t);
+
+          t += step;
+
+          setTimeout(() => {
+            f4.setAttribute('animation__fadeout', `property: material.opacity; from: 1; to: 0; dur: ${crossfadeDur}; easing: easeInOutQuad`);
+            tunnel.emit('start-tunnel');
+          }, t);
         });
       }
     });
 
     // ==========================================
-    // 达芬奇分形隧道（被场记严格控制版）
+    // 达芬奇分形隧道
     // ==========================================
     AFRAME.registerComponent('generative-tunnel', {
       schema: {
@@ -95,29 +99,17 @@
       },
 
       init: function () {
-        // 隧道在加载时完全按兵不动，直到听到场记喊 "start-tunnel" 才开始生长
-        this.el.addEventListener('start-tunnel', () => {
-          this.buildTunnel();
-        });
-      },
-
-      buildTunnel: function() {
         const data = this.data;
         const el = this.el;
-
-        const growthDuration = 450; 
-        const allLayersGrownTime = ((data.layers - 1) * data.staggerDelay) + growthDuration;
 
         const rootAnchor = document.createElement('a-entity');
         rootAnchor.setAttribute('scale', `${data.baseScale} ${data.baseScale} ${data.baseScale}`);
         el.appendChild(rootAnchor);
 
-        let currentParent = rootAnchor;
-
         const applyOpacityToModel = (e) => {
           const model = e.detail.model;
-          const layerIndex = e.target.getAttribute('data-index') || 0;
-          const targetOpacity = (layerIndex == 0) ? 1.0 : 0.15 + (layerIndex / (data.layers - 1)) * 0.85;
+          const layerIndex = parseInt(e.target.getAttribute('data-index') || 0);
+          const targetOpacity = (layerIndex === 0) ? 1.0 : 0.15 + (layerIndex / (data.layers - 1)) * 0.85;
 
           model.traverse((node) => {
             if (node.isMesh && node.material) {
@@ -127,10 +119,56 @@
             }
           });
         };
+        this.applyOpacityToModel = applyOpacityToModel;
 
-        for (let i = 0; i < data.layers; i++) {
-          // 由于是由事件触发，这里不需要再加任何人为的延迟 padding，直接从 0 开始算！
-          const growDelay = i * data.staggerDelay;
+        // ==========================================
+        // 【核心分离】：坚固的第一层（Anchor）
+        // 在网页加载之初直接“物理浇筑”，没有任何动画和延迟
+        // 当海报被识别时，它将立刻出现在海报上作为静止的底座
+        // ==========================================
+        const layerContainer0 = document.createElement('a-entity');
+        const growthNode0 = document.createElement('a-entity');
+        
+        const square0 = document.createElement('a-entity');
+        square0.setAttribute('gltf-model', '#model-square');
+        square0.setAttribute('rotation', '-90 0 0');
+        square0.setAttribute('data-index', 0); 
+
+        const circle0 = document.createElement('a-entity');
+        circle0.setAttribute('gltf-model', '#model-circle');
+        circle0.setAttribute('rotation', '-90 0 0');
+        circle0.setAttribute('data-index', 0);
+
+        square0.addEventListener('model-loaded', applyOpacityToModel);
+        circle0.addEventListener('model-loaded', applyOpacityToModel);
+
+        growthNode0.appendChild(square0);
+        growthNode0.appendChild(circle0);
+        layerContainer0.appendChild(growthNode0);
+        rootAnchor.appendChild(layerContainer0);
+
+        // 将第一层的顶端保存下来，供后续迭代使用
+        this.currentParent = growthNode0;
+
+        // 监听场记的哨声，只启动第 2 层及以后的迭代
+        this.el.addEventListener('start-tunnel', () => {
+          this.buildTunnel();
+        });
+      },
+
+      buildTunnel: function() {
+        const data = this.data;
+        const growthDuration = 450; 
+        
+        // 我们去掉了第一层，所以参与生长的层数是 layers - 1
+        const iteratingLayersCount = data.layers - 1; 
+        const allLayersGrownTime = ((iteratingLayersCount - 1) * data.staggerDelay) + growthDuration;
+        
+        let currentParent = this.currentParent;
+
+        // 循环直接从 i = 1 开始（第 2 层）
+        for (let i = 1; i < data.layers; i++) {
+          const growDelay = (i - 1) * data.staggerDelay; // 让生长时间从 0 开始算起
           const rotationDelay = allLayersGrownTime;
 
           const layerContainer = document.createElement('a-entity');
@@ -144,16 +182,10 @@
           growthNode.setAttribute('scale', '1 1 1');
           growthNode.setAttribute('rotation', '0 0 0');
 
-          if (i === 0) {
-            layerContainer.setAttribute('animation__scale', `property: scale; from: 0 0 0; to: 1 1 1; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad`);
-          } else {
-            growthNode.setAttribute('animation__pos', `property: position; from: 0 0 0; to: 0 0 ${data.zStep}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad`);
-            growthNode.setAttribute('animation__scale', `property: scale; from: 1 1 1; to: ${data.scaleMultiplier} ${data.scaleMultiplier} ${data.scaleMultiplier}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad`);
-          }
-
-          if (i > 0) {
-            layerContainer.setAttribute('animation__rotation', `property: rotation; from: 0 0 0; to: 0 0 10; dur: 2500; delay: ${rotationDelay}; easing: easeOutCubic`);
-          }
+          growthNode.setAttribute('animation__pos', `property: position; from: 0 0 0; to: 0 0 ${data.zStep}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad`);
+          growthNode.setAttribute('animation__scale', `property: scale; from: 1 1 1; to: ${data.scaleMultiplier} ${data.scaleMultiplier} ${data.scaleMultiplier}; dur: ${growthDuration}; delay: ${growDelay}; easing: easeOutQuad`);
+          
+          layerContainer.setAttribute('animation__rotation', `property: rotation; from: 0 0 0; to: 0 0 10; dur: 2500; delay: ${rotationDelay}; easing: easeOutCubic`);
 
           const square = document.createElement('a-entity');
           square.setAttribute('gltf-model', '#model-square');
@@ -165,29 +197,27 @@
           circle.setAttribute('rotation', '-90 0 0');
           circle.setAttribute('data-index', i);
 
-          square.addEventListener('model-loaded', applyOpacityToModel);
-          circle.addEventListener('model-loaded', applyOpacityToModel);
+          square.addEventListener('model-loaded', this.applyOpacityToModel);
+          circle.addEventListener('model-loaded', this.applyOpacityToModel);
 
           const particlesWrapper = document.createElement('a-entity');
           particlesWrapper.setAttribute('position', '0 0 0');
           particlesWrapper.setAttribute('scale', '1 1 1');
           particlesWrapper.setAttribute('rotation', '0 0 0');
 
-          if (i > 0) {
-            const particleDissolveDelay = allLayersGrownTime + 2500 + (i * 100); 
-            const driftX = (Math.random() - 0.5) * 0.4; 
-            const driftY = (Math.random() - 0.5) * 0.4; 
-            const driftZ = Math.random() * 0.3;        
-            const rotX = (Math.random() - 0.5) * 20;
-            const rotY = (Math.random() - 0.5) * 20;
-            const rotZ = (Math.random() - 0.5) * 20;
+          const particleDissolveDelay = rotationDelay + 2500 + (i * 100); 
+          const driftX = (Math.random() - 0.5) * 0.4; 
+          const driftY = (Math.random() - 0.5) * 0.4; 
+          const driftZ = Math.random() * 0.3;        
+          const rotX = (Math.random() - 0.5) * 20;
+          const rotY = (Math.random() - 0.5) * 20;
+          const rotZ = (Math.random() - 0.5) * 20;
 
-            setTimeout(() => {
-              particlesWrapper.setAttribute('animation__dissolvePos', `property: position; to: ${driftX} ${driftY} ${driftZ}; dur: 2000; easing: easeOutSine`);
-              particlesWrapper.setAttribute('animation__dissolveRot', `property: rotation; to: ${rotX} ${rotY} ${rotZ}; dur: 2000; easing: easeOutSine`);
-              particlesWrapper.setAttribute('animation__dissolveScale', `property: scale; to: 0 0 0; dur: 2000; easing: easeOutSine`);
-            }, particleDissolveDelay); 
-          }
+          setTimeout(() => {
+            particlesWrapper.setAttribute('animation__dissolvePos', `property: position; to: ${driftX} ${driftY} ${driftZ}; dur: 2000; easing: easeOutSine`);
+            particlesWrapper.setAttribute('animation__dissolveRot', `property: rotation; to: ${rotX} ${rotY} ${rotZ}; dur: 2000; easing: easeOutSine`);
+            particlesWrapper.setAttribute('animation__dissolveScale', `property: scale; to: 0 0 0; dur: 2000; easing: easeOutSine`);
+          }, particleDissolveDelay); 
 
           particlesWrapper.appendChild(square);
           particlesWrapper.appendChild(circle);
@@ -227,12 +257,12 @@
       
       <a-plane color="#0d1117" opacity="0.2" width="4" height="4" position="0 0 0.01"></a-plane>
       
-      <a-plane id="f1" visible="false" material="src: #img-frame1; shader: flat; transparent: true" width="0.75*0.9" height="1*0.9" position="0 0 0.02"></a-plane>
-      <a-plane id="f2" visible="false" material="src: #img-frame2; shader: flat; transparent: true" width="0.75*0.9" height="1*0.9" position="0 0 0.02"></a-plane>
-      <a-plane id="f3" visible="false" material="src: #img-frame3; shader: flat; transparent: true" width="0.75*0.9" height="1*0.9" position="0 0 0.02"></a-plane>
-      <a-plane id="f4" visible="false" material="src: #img-frame4; shader: flat; transparent: true" width="0.75*0.9" height="1*0.9" position="0 0 0.02"></a-plane>
+      <a-plane id="f1" material="src: #img-frame1; shader: flat; opacity: 0; transparent: true" width="0.74" height="1" position="0 0 0.02"></a-plane>
+      <a-plane id="f2" material="src: #img-frame2; shader: flat; opacity: 0; transparent: true" width="0.74" height="1" position="0 0 0.02"></a-plane>
+      <a-plane id="f3" material="src: #img-frame3; shader: flat; opacity: 0; transparent: true" width="0.74" height="1" position="0 0 0.02"></a-plane>
+      <a-plane id="f4" material="src: #img-frame4; shader: flat; opacity: 0; transparent: true" width="0.74" height="1" position="0 0 0.02"></a-plane>
 
-      <a-entity id="the-tunnel" position="0 0 0.05" rotation="0 0 0" generative-tunnel="layers: 20; baseScale: 0.35; scaleMultiplier: 1.125; zStep: 0.05; staggerDelay: 300"></a-entity>
+      <a-entity id="the-tunnel" position="0 0.035 0.05" rotation="0 0 0" generative-tunnel="layers: 20; baseScale: 0.34; scaleMultiplier: 1.125; zStep: 0.03; staggerDelay: 200"></a-entity>
 
     </xrextras-named-image-target>
   </a-scene>
